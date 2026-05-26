@@ -1,0 +1,32 @@
+name: ben-plugin-update-check
+description: |
+  Use when: Checking Claude Code plugins for available updates.
+  Triggers: "plugin update", "check plugins", "update plugins",
+            "are plugins up to date", "plugin versions", "plugin maintenance".
+  Does: Lists installed plugins -> checks npm registry for latest versions ->
+        reports outdated ones -> optionally updates.
+  NOT for: Installing new plugins, removing plugins.
+
+provider: claude
+model: sonnet
+
+nodes:
+  # ═══════════════════════════════════════════════════════════════
+  # PHASE 1: GATHER — installed plugin versions
+  # ═══════════════════════════════════════════════════════════════
+
+  - id: list-plugins
+    bash: |
+      # List all installed plugins with their current versions
+      claude plugin list 2>&1 || echo "PLUGIN_CMD_UNAVAILABLE"
+      echo "---JSON---"
+      claude plugin list --json 2>/dev/null || echo "{}"
+
+  # ═══════════════════════════════════════════════════════════════
+  # PHASE 2: CHECK + REPORT — compare against registry, report, offer update
+  # ═══════════════════════════════════════════════════════════════
+
+  - id: report
+    command: ben-plugin-update-report
+    depends_on: [list-plugins]
+    context: fresh
