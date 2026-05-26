@@ -1,0 +1,61 @@
+name: ben-fieldtheory-sync
+description: |
+  Use when: Running the weekly X/Twitter bookmark sync via Field Theory CLI.
+  Triggers: "fieldtheory sync", "ft sync", "bookmark sync", "x bookmark sync",
+            "sync twitter bookmarks", "sync x bookmarks", "fieldtheory".
+  Does: Preflight check -> incremental sync from Comet -> classify (regex then LLM) ->
+        rebuild index -> generate themed digest -> save report to Vault.
+  NOT for: Searching bookmarks (use ft search directly), one-off ft commands.
+
+provider: claude
+model: sonnet
+
+nodes:
+  - id: preflight
+    bash: |
+      source ~/.nvm/nvm.sh && nvm use 22 --silent 2>/dev/null
+      # Verify Comet cookies DB exists
+      COOKIES_DB="$HOME/Library/Application Support/Comet/Default/Cookies"
+      if [ -f "$COOKIES_DB" ]; then
+        echo "preflight_ok=true"
+        echo "Comet cookies DB found at: $COOKIES_DB"
+      else
+        echo "preflight_ok=false"
+        echo "WARNING: Comet cookies DB not found — sync may fail"
+      fi
+      which ft && ft --version 2>/dev/null || echo "ft CLI: not found on PATH"
+
+  - id: sync
+    bash: |
+      source ~/.nvm/nvm.sh && nvm use 22 --silent 2>/dev/null
+      ft sync \
+        --chrome-user-data-dir "/Users/BLW_M2_HOME/Library/Application Support/Comet" \
+        --chrome-profile-directory Default 2>&1
+    depends_on: [preflight]
+
+  - id: classify
+    bash: |
+      source ~/.nvm/nvm.sh && nvm use 22 --silent 2>/dev/null
+      echo "=== Regex classification ==="
+      ft classify --regex 2>&1
+      echo "=== LLM backfill ==="
+      ft classify 2>&1
+    depends_on: [sync]
+
+  - id: index
+    bash: |
+      source ~/.nvm/nvm.sh && nvm use 22 --silent 2>/dev/null
+      ft index 2>&1
+    depends_on: [classify]
+
+  - id: stats
+    bash: |
+      source ~/.nvm/nvm.sh && nvm use 22 --silent 2>/dev/null
+      echo "=== Stats ===" && ft stats 2>&1
+      echo "=== Categories ===" && ft categories 2>&1
+    depends_on: [index]
+
+  - id: digest
+    command: ben-fieldtheory-digest
+    depends_on: [stats]
+    context: fresh

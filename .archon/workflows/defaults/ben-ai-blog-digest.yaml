@@ -1,0 +1,19 @@
+name: ben-ai-blog-digest
+description: |
+  Use when: You want today's new articles from the major AI company blogs.
+  Triggers: "ai blog digest", "what did anthropic post today", "any new AI blog posts",
+            "check the blogs", "AI news digest", "blog digest".
+  Does: Fetches RSS from Anthropic, OpenAI, Google AI, LangChain -> filters last 24h ->
+        delivers formatted digest.
+  NOT for: Deep research, older articles, non-AI blogs.
+
+provider: claude
+model: haiku
+
+nodes:
+  - id: get-date
+    bash: date -u '+%Y-%m-%d %H:%M UTC'
+
+  - id: digest
+    command: ben-blog-digest-fetch
+    depends_on: [get-date]

@@ -1,0 +1,71 @@
+name: ben-nibble-tolls
+description: |
+  Use when: Running the Nibble Bikes weekly toll reconciliation.
+  Triggers: "nibble tolls", "toll reconciliation", "nibble bikes tolls",
+            "run toll report", "weekly tolls".
+  Does: Downloads Linkt CSV (Playwright) -> fetches HQ reservations ->
+        reconciles -> sends report email + drafts hirer emails.
+  NOT for: Viewing past reports, editing toll data manually.
+  REQUIRES: Playwright venv in nibble_tolls/venv. ~/.env with HQ_API_KEY, LINKT credentials.
+
+provider: claude
+model: sonnet
+
+nodes:
+  # ═══════════════════════════════════════════════════════════════
+  # PHASE 1: DATA — parallel gather
+  # ═══════════════════════════════════════════════════════════════
+
+  - id: download-linkt
+    bash: |
+      SCRIPT_DIR="/Users/BLW_M2_HOME/Scripts_&_Tools/Automation_Reporting/nibble_tolls"
+      VENV="$SCRIPT_DIR/venv/bin/python3"
+      source "$HOME/.env" 2>/dev/null || true
+      cd "$SCRIPT_DIR"
+      "$VENV" linkt_download.py 2>&1
+      echo "exit_code=$?"
+
+  - id: fetch-hq
+    bash: |
+      SCRIPT_DIR="/Users/BLW_M2_HOME/Scripts_&_Tools/Automation_Reporting/nibble_tolls"
+      VENV="$SCRIPT_DIR/venv/bin/python3"
+      source "$HOME/.env" 2>/dev/null || true
+      cd "$SCRIPT_DIR"
+      START=$(python3 -c "import datetime; print((datetime.date.today() - datetime.timedelta(days=6)).strftime('%Y-%m-%d'))")
+      TODAY=$(date '+%Y-%m-%d')
+      "$VENV" hq_reservations.py --start "$START" --end "$TODAY" 2>&1
+      echo "exit_code=$?"
+
+  # ═══════════════════════════════════════════════════════════════
+  # PHASE 2: RECONCILE — match toll charges to reservations
+  # ═══════════════════════════════════════════════════════════════
+
+  - id: reconcile
+    bash: |
+      SCRIPT_DIR="/Users/BLW_M2_HOME/Scripts_&_Tools/Automation_Reporting/nibble_tolls"
+      VENV="$SCRIPT_DIR/venv/bin/python3"
+      source "$HOME/.env" 2>/dev/null || true
+      cd "$SCRIPT_DIR"
+      # Find most recent data files
+      LINKT_CSV=$(ls -t data/linkt_*.csv 2>/dev/null | head -1)
+      HQ_JSON=$(ls -t data/hq_reservations_*.json 2>/dev/null | head -1)
+      if [[ -z "$LINKT_CSV" || -z "$HQ_JSON" ]]; then
+        echo "ERROR: Missing data files. linkt=$LINKT_CSV hq=$HQ_JSON"
+        exit 1
+      fi
+      echo "Using: $LINKT_CSV + $HQ_JSON"
+      "$VENV" reconcile_and_report.py \
+        --linkt "$LINKT_CSV" \
+        --hq "$HQ_JSON" \
+        --output-dir data/ 2>&1
+      echo "exit_code=$?"
+    depends_on: [download-linkt, fetch-hq]
+
+  # ═══════════════════════════════════════════════════════════════
+  # PHASE 3: REPORT — review reconciliation + send emails
+  # ═══════════════════════════════════════════════════════════════
+
+  - id: report
+    command: ben-nibble-tolls-report
+    depends_on: [reconcile]
+    context: fresh

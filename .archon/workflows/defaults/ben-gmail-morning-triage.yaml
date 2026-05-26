@@ -1,0 +1,29 @@
+name: ben-gmail-morning-triage
+description: |
+  Use when: Running the morning Gmail inbox triage.
+  Triggers: "gmail triage", "morning triage", "triage inbox", "check emails",
+            "triage my gmail", "process inbox".
+  Does: Fetches all unread inbox messages -> classifies urgency ->
+        archives low-priority -> posts triage summary to Slack.
+  NOT for: Reading a specific email, searching old mail, composing.
+
+provider: claude
+model: sonnet
+
+nodes:
+  - id: fetch
+    bash: echo "Fetching inbox — $(date '+%Y-%m-%d %H:%M')"
+
+  - id: classify
+    command: ben-gmail-triage-classify
+    depends_on: [fetch]
+
+  - id: archive
+    command: ben-gmail-triage-archive
+    depends_on: [classify]
+    context: fresh
+
+  - id: report
+    command: ben-gmail-triage-report
+    depends_on: [archive]
+    context: fresh
