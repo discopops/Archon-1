@@ -1,0 +1,95 @@
+name: ben-hermes-job-audit
+description: |
+  Use when: You want to audit the health of all active Hermes cron jobs.
+  Triggers: "audit hermes jobs", "check my automations", "hermes health check",
+            "which jobs are broken", "automation audit", "check my daily jobs",
+            "hermes job audit", "what automations are broken".
+  Does: Reads all active Hermes jobs -> reads latest output for each ->
+        classifies Working/Degraded/Broken -> diagnoses root causes ->
+        auto-fixes what it can -> saves report to Vault -> Slack summary.
+  NOT for: Editing a specific job prompt, checking a single job, creating new jobs.
+
+  Runs against the LIVE checkout — does not use a worktree.
+  Uses ~/.hermes/cron/ directly. Safe to run at any time.
+
+provider: claude
+model: sonnet
+
+nodes:
+  # ═══════════════════════════════════════════════════════════════
+  # PHASE 1: GATHER — Read all jobs + latest outputs
+  # ═══════════════════════════════════════════════════════════════
+
+  - id: gather
+    command: ben-job-audit-gather
+
+  # ═══════════════════════════════════════════════════════════════
+  # PHASE 2: CLASSIFY — Working / Degraded / Broken per job
+  # ═══════════════════════════════════════════════════════════════
+
+  - id: classify
+    command: ben-job-audit-classify
+    depends_on: [gather]
+    context: fresh
+    model: haiku
+
+  # ═══════════════════════════════════════════════════════════════
+  # PHASE 3: DIAGNOSE — Root cause + auto-fix broken/degraded
+  # ═══════════════════════════════════════════════════════════════
+
+  - id: diagnose
+    command: ben-job-audit-diagnose
+    depends_on: [classify]
+    context: fresh
+
+  # ═══════════════════════════════════════════════════════════════
+  # PHASE 4: GATE — Skip diagnose if everything is healthy
+  # ═══════════════════════════════════════════════════════════════
+
+  - id: check-needs-diagnose
+    bash: |
+      BROKEN=$(python3 -c "
+      import json, sys
+      try:
+          findings = json.load(open('$ARTIFACTS_DIR/audit-findings.json'))
+          n = sum(1 for j in findings['jobs'] if j['status'] in ('broken','degraded'))
+          print(n)
+      except:
+          print(0)
+      ")
+      if [ "$BROKEN" -gt 0 ]; then
+        echo "needs_diagnose=true"
+      else
+        echo "needs_diagnose=false"
+        # Write an empty fixes file so report node doesn't fail
+        echo '{"fixes":[]}' > "$ARTIFACTS_DIR/audit-fixes.json"
+      fi
+    depends_on: [classify]
+
+  # Diagnose only runs if there are broken/degraded jobs
+  - id: diagnose-jobs
+    command: ben-job-audit-diagnose
+    depends_on: [check-needs-diagnose]
+    when: "check-needs-diagnose.output contains 'needs_diagnose=true'"
+    context: fresh
+
+  # Bridge: ensure fixes file exists even when diagnose was skipped
+  - id: bridge-fixes
+    bash: |
+      if [ ! -f "$ARTIFACTS_DIR/audit-fixes.json" ]; then
+        echo '{"fixes":[]}' > "$ARTIFACTS_DIR/audit-fixes.json"
+        echo "No broken/degraded jobs — skipped diagnose phase"
+      else
+        echo "Fixes file present from diagnose phase"
+      fi
+    depends_on: [diagnose-jobs, check-needs-diagnose]
+    trigger_rule: one_success
+
+  # ═══════════════════════════════════════════════════════════════
+  # PHASE 5: REPORT — Vault save + Slack deliver + iMessage alert
+  # ═══════════════════════════════════════════════════════════════
+
+  - id: report
+    command: ben-job-audit-report
+    depends_on: [bridge-fixes]
+    context: fresh
