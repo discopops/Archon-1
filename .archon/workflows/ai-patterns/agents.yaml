@@ -1,0 +1,27 @@
+name: agents
+description: |
+  Demonstrates the Agents pattern: an autonomous agent with access to tools
+  that can plan, act, observe, and iterate to complete open-ended tasks.
+  The agent decides which tools to use and when the goal has been achieved.
+  Triggers: "agents pattern", "autonomous agent", "tool-using agent", "agent demo", "agentic task".
+
+provider: claude
+model: sonnet
+
+nodes:
+  - id: agent
+    prompt: |
+      You are an autonomous agent. Your task:
+
+      $ARGUMENTS
+
+      Use your available tools to complete this task fully. Work through it
+      step by step:
+      1. Understand exactly what is being asked
+      2. Identify what information or actions are needed
+      3. Use tools to gather information or take actions
+      4. Verify your work and iterate if needed
+      5. Report what you did and what the outcome was
+
+      Be methodical. If new information changes your approach, adapt accordingly.
+      Complete the task as thoroughly as possible.

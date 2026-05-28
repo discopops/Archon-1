@@ -1,0 +1,76 @@
+name: routing
+description: |
+  Demonstrates the Routing pattern: classify the input type, then route to
+  the appropriate specialist handler. Only the matching handler runs.
+  Triggers: "routing pattern", "classify and route", "input routing", "dynamic routing".
+
+provider: claude
+model: sonnet
+
+nodes:
+  # ─── PHASE 1: CLASSIFY ────────────────────────────────────────────────────
+
+  - id: classify
+    prompt: |
+      Classify the following input into EXACTLY ONE category:
+      BUG | FEATURE | QUESTION | DOCS
+
+      Input: $ARGUMENTS
+
+      Reply with only the category name and nothing else.
+    model: haiku
+    allowed_tools: []
+
+  # ─── PHASE 2: ROUTE TO SPECIALIST (only matching node runs) ───────────────
+
+  - id: handle-bug
+    prompt: |
+      You are a debugging specialist. For this bug report:
+
+      $ARGUMENTS
+
+      Provide:
+      1. Likely root cause
+      2. Suggested fix (with code if applicable)
+      3. How to verify the fix works
+    when: "$classify.output == 'BUG'"
+    depends_on: [classify]
+
+  - id: handle-feature
+    prompt: |
+      You are a product engineer. For this feature request:
+
+      $ARGUMENTS
+
+      Provide:
+      1. Implementation breakdown (ordered tasks)
+      2. Key dependencies or risks
+      3. Complexity estimate (S / M / L) with reasoning
+    when: "$classify.output == 'FEATURE'"
+    depends_on: [classify]
+
+  - id: handle-question
+    prompt: |
+      You are a technical educator. For this question:
+
+      $ARGUMENTS
+
+      Provide:
+      1. A direct, clear answer
+      2. A brief concrete example
+      3. Related concepts worth knowing
+    when: "$classify.output == 'QUESTION'"
+    depends_on: [classify]
+
+  - id: handle-docs
+    prompt: |
+      You are a technical writer. For this documentation request:
+
+      $ARGUMENTS
+
+      Provide:
+      1. The improved documentation text
+      2. What was unclear or missing in the original
+      3. Where this documentation should live
+    when: "$classify.output == 'DOCS'"
+    depends_on: [classify]

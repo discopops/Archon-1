@@ -1,0 +1,43 @@
+name: prompt-chaining
+description: |
+  Demonstrates the Prompt Chaining pattern: sequential LLM calls where each
+  step's output feeds directly into the next. Useful for multi-stage reasoning
+  tasks (research → analyse → draft → refine).
+  Triggers: "prompt chaining", "sequential chain", "chain steps", "multi-step pipeline".
+
+provider: claude
+model: sonnet
+
+nodes:
+  - id: research
+    prompt: |
+      Research the following topic thoroughly. List 5–7 key facts and concepts:
+
+      $ARGUMENTS
+
+  - id: analyse
+    prompt: |
+      Based on this research:
+
+      $research.output
+
+      Identify the 3 most important insights and explain clearly why each matters.
+    depends_on: [research]
+
+  - id: draft
+    prompt: |
+      Using this analysis:
+
+      $analyse.output
+
+      Write a clear, concise summary (3 paragraphs) suitable for a general audience.
+    depends_on: [analyse]
+
+  - id: refine
+    prompt: |
+      Review and improve this draft for clarity, flow, and impact:
+
+      $draft.output
+
+      Produce the final polished version. Fix anything awkward or unclear.
+    depends_on: [draft]

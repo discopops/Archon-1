@@ -1,0 +1,51 @@
+name: evaluator-optimizer
+description: |
+  Demonstrates the Evaluator-Optimizer pattern: generate an initial draft, then
+  iteratively evaluate and improve it until all quality criteria are met (or
+  max iterations reached). Uses a loop node with a completion signal.
+  Triggers: "evaluator optimizer", "iterative improvement", "evaluate and improve", "refine until good".
+
+provider: claude
+model: sonnet
+
+nodes:
+  # ─── PHASE 1: GENERATE INITIAL DRAFT ─────────────────────────────────────
+
+  - id: generate
+    prompt: |
+      Create an initial draft for the following task. Produce a complete first
+      attempt — don't aim for perfection yet, just cover everything:
+
+      $ARGUMENTS
+
+  # ─── PHASE 2: EVALUATE AND IMPROVE (loops until APPROVED) ─────────────────
+
+  - id: evaluate-and-improve
+    depends_on: [generate]
+    loop:
+      prompt: |
+        You are both an evaluator and an optimizer.
+
+        Original draft:
+        $generate.output
+
+        Previous improvement (empty on first pass):
+        $LOOP_PREV_OUTPUT
+
+        ## Your Task
+
+        Evaluate the most recent version — use the previous improvement if one exists,
+        otherwise evaluate the original draft.
+
+        Score each criterion 1–5:
+        - Clarity: Is it easy to understand?
+        - Completeness: Does it cover everything needed?
+        - Quality: Is it well-crafted and accurate?
+
+        If ALL scores are 4 or above, output exactly:
+        APPROVED
+        [final version here]
+
+        Otherwise, list 2–3 specific improvements needed, then output the improved version.
+      until: 'APPROVED'
+      max_iterations: 3

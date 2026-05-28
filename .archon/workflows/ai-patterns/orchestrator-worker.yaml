@@ -1,0 +1,71 @@
+name: orchestrator-worker
+description: |
+  Demonstrates the Orchestrator-Worker pattern: a coordinator decomposes a
+  complex task into 3 independent subtasks, parallel workers execute each one,
+  then a synthesiser aggregates the results into a coherent final deliverable.
+  Triggers: "orchestrator worker", "task decomposition", "parallel workers", "decompose and execute".
+
+provider: claude
+model: sonnet
+
+nodes:
+  # ─── PHASE 1: DECOMPOSE ───────────────────────────────────────────────────
+
+  - id: orchestrate
+    prompt: |
+      You are an orchestrator. Break the following task into exactly 3 independent
+      subtasks that can be completed in parallel. Label them SUBTASK-1, SUBTASK-2,
+      SUBTASK-3. Each subtask must be self-contained and clearly scoped so a worker
+      can complete it without needing the other subtasks' results.
+
+      Task: $ARGUMENTS
+
+  # ─── PHASE 2: PARALLEL WORKERS ────────────────────────────────────────────
+
+  - id: worker-1
+    prompt: |
+      Complete SUBTASK-1 from this decomposition:
+
+      $orchestrate.output
+
+      Provide a thorough, self-contained response for your subtask only.
+    depends_on: [orchestrate]
+    context: fresh
+
+  - id: worker-2
+    prompt: |
+      Complete SUBTASK-2 from this decomposition:
+
+      $orchestrate.output
+
+      Provide a thorough, self-contained response for your subtask only.
+    depends_on: [orchestrate]
+    context: fresh
+
+  - id: worker-3
+    prompt: |
+      Complete SUBTASK-3 from this decomposition:
+
+      $orchestrate.output
+
+      Provide a thorough, self-contained response for your subtask only.
+    depends_on: [orchestrate]
+    context: fresh
+
+  # ─── PHASE 3: SYNTHESISE ──────────────────────────────────────────────────
+
+  - id: synthesise
+    prompt: |
+      You are a synthesiser. Combine the three worker outputs below into a single
+      cohesive, well-structured final deliverable. Eliminate redundancy, resolve
+      any conflicts, and present a unified result that fully addresses the original task.
+
+      ## Worker 1
+      $worker-1.output
+
+      ## Worker 2
+      $worker-2.output
+
+      ## Worker 3
+      $worker-3.output
+    depends_on: [worker-1, worker-2, worker-3]

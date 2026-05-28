@@ -1,0 +1,51 @@
+name: parallelization
+description: |
+  Demonstrates the Parallelization pattern: independent subtasks run concurrently,
+  then results are aggregated by a synthesiser. Runs 3 specialist reviewers in
+  parallel before combining findings.
+  Triggers: "parallelization", "parallel review", "fan out", "concurrent agents", "parallel agents".
+
+provider: claude
+model: sonnet
+
+nodes:
+  # ─── PHASE 1: PARALLEL SPECIALISTS (all run concurrently) ─────────────────
+
+  - id: security-review
+    prompt: |
+      Review the following from a SECURITY perspective only.
+      Identify vulnerabilities, risks, and recommended mitigations:
+
+      $ARGUMENTS
+
+  - id: performance-review
+    prompt: |
+      Review the following from a PERFORMANCE perspective only.
+      Identify bottlenecks, inefficiencies, and optimisations:
+
+      $ARGUMENTS
+
+  - id: quality-review
+    prompt: |
+      Review the following from a CODE QUALITY perspective only.
+      Identify maintainability issues, anti-patterns, and improvements:
+
+      $ARGUMENTS
+
+  # ─── PHASE 2: AGGREGATE ───────────────────────────────────────────────────
+
+  - id: synthesise
+    prompt: |
+      Combine these three parallel specialist reviews into a single prioritised
+      action list (CRITICAL → HIGH → MEDIUM → LOW). Eliminate duplicates and
+      surface the most impactful findings first.
+
+      ## Security Review
+      $security-review.output
+
+      ## Performance Review
+      $performance-review.output
+
+      ## Code Quality Review
+      $quality-review.output
+    depends_on: [security-review, performance-review, quality-review]
